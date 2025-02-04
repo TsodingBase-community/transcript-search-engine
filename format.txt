@@ -1,0 +1,41 @@
+# Don't look into this file yet
+# it's basically a draft
+TSOD0001 # magic
+u64 creation ts
+
+# using 32 bit offsets, if we ever have more than 4gb of transcripts, change to 64
+u32 header size
+u32 file size
+u32 video count
+u32 video table offset
+u32 vocab count
+u32 vocab table offset
+u32 term count
+u32 term table offset
+
+video table {
+    u32 transcript_offset
+    byte length
+    char[] string
+}
+
+vocab table { # unaligned, is loaded into a hashmap anyway
+    u32 id
+    byte length # up to 255 chars per token, seems enough
+    char[] string
+}
+
+term table {
+    u32 offset
+    u32 count
+}
+
+term items table { # unaligned, uses differential encoding for all its data
+    diff_enc video_id
+    diff_enc term_pos
+    diff_enc term_ts_min
+    diff_enc term_ts_max
+    diff_enc term_byte_pos
+}
+
+
