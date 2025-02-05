@@ -37,17 +37,35 @@ typedef struct {
 
 TermOffset *term_offsets;
 
+typedef struct {
+    uint32_t transcript_offset;
+    char *name;
+} Video;
+
+Video *videos;
+
 void load_index_data(void) {
+    // vocab
     shdefault(vocab, NOT_FOUND);
-    uint32_t offs = 0;
+    uint32_t offs = header.vocab_table_offset;
     for (int i = 0; i < header.vocab_count; i++) {
-        uint32_t term_id = *(uint32_t*) (mapped_file + header.vocab_table_offset + offs);
-        uint8_t word_length = *(uint8_t*) (mapped_file + header.vocab_table_offset + 4 + offs);
-        char *word = (char*) (mapped_file + header.vocab_table_offset + 5 + offs);
+        uint32_t term_id = *(uint32_t*) (mapped_file + offs);
+        uint8_t word_length = *(uint8_t*) (mapped_file + 4 + offs);
+        char *word = (char*) (mapped_file + 5 + offs);
         shput(vocab, word, term_id);
         offs += word_length + 5;
     }
+    // terms
     term_offsets = (TermOffset*) (mapped_file + header.term_table_offset);
+    // videos
+    offs = header.video_table_offset;
+    videos = calloc(header.video_count, sizeof(videos[0]));
+    for (int i = 0; i < header.video_count; i++) {
+        videos[i].transcript_offset = *(uint32_t*) (mapped_file + offs);
+        uint8_t word_length = *(uint8_t*) (mapped_file + 4 + offs);
+        videos[i].name = (char*) (mapped_file + 5 + offs);
+        offs += word_length + 5;
+    }
 }
 
 int readln(char *buf, size_t len) {

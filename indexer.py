@@ -64,7 +64,7 @@ class VOD:
     def write(self, out):
         self._transcript_offset_pos = out.tell()
         write_u32(out, 0)
-        write_str8(out, self.name)
+        write_str8(out, self.name + '\0')
 
 def tokenize(text):
     for w in re.findall(r"['a-z0-9]+", text.lower()):
