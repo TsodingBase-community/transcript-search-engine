@@ -30,17 +30,37 @@ typedef struct {
 Vocab *vocab = NULL;
 const uint32_t NOT_FOUND = 0xFFFFFFFF;
 
-void load_vocab(void) {
+typedef struct {
+    uint32_t offset;
+    uint32_t count;
+} TermOffset;
+
+TermOffset *term_offsets;
+
+void load_index_data(void) {
     shdefault(vocab, NOT_FOUND);
     uint32_t offs = 0;
     for (int i = 0; i < header.vocab_count; i++) {
         uint32_t term_id = *(uint32_t*) (mapped_file + header.vocab_table_offset + offs);
         uint8_t word_length = *(uint8_t*) (mapped_file + header.vocab_table_offset + 4 + offs);
         char *word = (char*) (mapped_file + header.vocab_table_offset + 5 + offs);
-        printf("word: %s\n", word);
         shput(vocab, word, term_id);
         offs += word_length + 5;
     }
+    term_offsets = (TermOffset*) (mapped_file + header.term_table_offset);
+}
+
+int readln(char *buf, size_t len) {
+    size_t i;
+    buf[0] = '\0';
+    for (i = 0; i < len - 1; i++) {
+        int c = getchar();
+        if (c < 0) return -1;
+        if (c == '\n') break;
+        buf[i] = c;
+    }
+    buf[i] = '\0';
+    return i;
 }
 
 int main(int argc, char **argv) {
@@ -74,17 +94,19 @@ int main(int argc, char **argv) {
         fprintf(stderr, "mmap failed\n");
         exit(1);
     }
-    load_vocab();
+    load_index_data();
     while (true) {
         char buf[100];
         printf("> ");
-        scanf("%s", buf);
+        if (readln(buf, 100) < 0) break;
         uint32_t id = shget(vocab, buf);
-        if (id != NOT_FOUND) {
-            printf("vocab['%s'] = %d\n", buf, id);
-        } else {
+        if (id == NOT_FOUND) {
             printf("vocab['%s'] not found\n", buf);
+            continue;
         }
+        printf("word='%s', term_id=%d, offset=%d, count=%d\n",
+                buf, id, term_offsets[id].offset, term_offsets[id].count);
     }
+    printf("\n");
     return 0;
 }
