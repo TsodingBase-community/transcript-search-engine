@@ -44,6 +44,64 @@ typedef struct {
 
 Video *videos;
 
+typedef struct {
+    uint32_t term_id;
+    uint32_t video_id;
+    uint32_t pos;
+    uint32_t ts_min;
+    uint32_t ts_max;
+    uint32_t byte_pos;
+    uint32_t count;
+    uint8_t *ptr;
+} TermIterator;
+
+uint32_t get_diff(uint8_t **ptr) {
+    uint32_t result = 0;
+    int shift = 0;
+    while (true) {
+        uint8_t n = **ptr;
+        result |= (n & 0x7f) << shift;
+        (*ptr)++;
+        if ((n & 0x80) == 0) break;
+        shift += 7;
+    }
+    return result;
+}
+
+bool next_term(TermIterator *term) {
+    if (term->count == 0) {
+        return false;
+    }
+    uint32_t video_id_diff = get_diff(&term->ptr);
+    uint32_t pos_diff = get_diff(&term->ptr);
+    uint32_t ts_min_diff = get_diff(&term->ptr);
+    uint32_t ts_max_diff = get_diff(&term->ptr);
+    uint32_t byte_pos_diff = get_diff(&term->ptr);
+    if (video_id_diff > 0) {
+        term->pos = 0;
+        term->ts_min = 0;
+        term->ts_max = 0;
+        term->byte_pos = 0;
+    }
+    term->video_id += video_id_diff;
+    term->pos += pos_diff;
+    term->ts_min += ts_min_diff;
+    term->ts_max += ts_max_diff;
+    term->byte_pos += byte_pos_diff;
+    term->count -= 1;
+    return true;
+}
+
+TermIterator create_term_iterator(uint32_t term_id) {
+    TermIterator term;
+    TermOffset term_offset = term_offsets[term_id];
+    term.term_id = term_id;
+    term.ptr = (uint8_t*) (mapped_file + term_offset.offset);
+    term.count = term_offset.count;
+    next_term(&term);
+    return term;
+}
+
 void load_index_data(void) {
     // vocab
     shdefault(vocab, NOT_FOUND);
@@ -122,8 +180,13 @@ int main(int argc, char **argv) {
             printf("vocab['%s'] not found\n", buf);
             continue;
         }
-        printf("word='%s', term_id=%d, offset=%d, count=%d\n",
-                buf, id, term_offsets[id].offset, term_offsets[id].count);
+        TermIterator term = create_term_iterator(id);
+        do {
+            printf("term_id=%d video_id=%d; pos=%d; "
+                    "ts_min=%d; ts_max=%d; byte_pos=%d; count=%d;\n",
+                    term.term_id, term.video_id, term.pos,
+                    term.ts_min, term.ts_max, term.byte_pos, term.count);
+        } while (next_term(&term));
     }
     printf("\n");
     return 0;
