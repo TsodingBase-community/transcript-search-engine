@@ -1,4 +1,4 @@
-CFLAGS=-Wall -Werror -pedantic -std=c11 -D_POSIX_SOURCE
+CFLAGS=-Wall -Werror -pedantic -std=c11 -D_POSIX_SOURCE -O3
 
 all: searcher
 
