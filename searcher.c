@@ -55,6 +55,18 @@ typedef struct {
     uint8_t *ptr;
 } TermIterator;
 
+typedef struct {
+    uint32_t video_id;
+    uint32_t ts_min;
+    uint32_t ts_max;
+    uint32_t byte_pos_min;
+    uint32_t byte_pos_max;
+    uint32_t rank;
+} SearchResult;
+
+const size_t MAX_TOKEN_LEN = 100;
+const size_t MAX_QUERY_LEN = 100;
+
 uint32_t get_diff(uint8_t **ptr) {
     uint32_t result = 0;
     int shift = 0;
@@ -100,6 +112,70 @@ TermIterator create_term_iterator(uint32_t term_id) {
     term.count = term_offset.count;
     next_term(&term);
     return term;
+}
+
+void post_process_token(char *buf) {
+    // lowercase ascii for now. TODO: stemming
+    size_t i = 0;
+    while (buf[i] != '\0') {
+        if (buf[i] >= 'A' && buf[i] <= 'Z') {
+            buf[i] -= 'A' - 'a';
+        }
+        i++;
+    }
+}
+
+TermIterator *tokenize(char *search_query, size_t *word_count) {
+    TermIterator *terms = NULL;
+    char buf[MAX_TOKEN_LEN];
+    size_t qlen = strlen(search_query);
+    size_t tlen = 0;
+    for (size_t i = 0; i < qlen; i++) {
+        char c = search_query[i];
+        if (c != ' ') {
+            if (tlen < MAX_TOKEN_LEN - 1) {
+                buf[tlen] = c;
+                tlen++;
+            }
+        } else {
+            if (tlen > 0) {
+                (*word_count)++;
+                buf[tlen] = '\0';
+                post_process_token(buf);
+                uint32_t term_id = shget(vocab, buf);
+                if (term_id != NOT_FOUND) {
+                    arrput(terms, create_term_iterator(term_id));
+                }
+                tlen = 0;
+            }
+        }
+    }
+    if (tlen > 0) {
+        (*word_count)++;
+        buf[tlen] = '\0';
+        post_process_token(buf);
+        uint32_t term_id = shget(vocab, buf);
+        if (term_id != NOT_FOUND) {
+            arrput(terms, create_term_iterator(term_id));
+        }
+    }
+    return terms;
+}
+
+SearchResult *search(char *search_query) {
+    SearchResult *results = NULL;
+    size_t word_count = 0;
+    TermIterator *terms = tokenize(search_query, &word_count);
+    printf("Word count: %ld, token count: %ld, tokens: [", word_count, arrlen(terms));
+    for (size_t i = 0; i < arrlen(terms); i++) {
+        printf("%d", terms[i].term_id);
+        if (i < arrlen(terms) - 1) {
+            printf(", ");
+        }
+    }
+    printf("]\n");
+    arrfree(terms);
+    return results;
 }
 
 void load_index_data(void) {
@@ -172,21 +248,11 @@ int main(int argc, char **argv) {
     }
     load_index_data();
     while (true) {
-        char buf[100];
+        char buf[MAX_QUERY_LEN];
         printf("> ");
-        if (readln(buf, 100) < 0) break;
-        uint32_t id = shget(vocab, buf);
-        if (id == NOT_FOUND) {
-            printf("vocab['%s'] not found\n", buf);
-            continue;
-        }
-        TermIterator term = create_term_iterator(id);
-        do {
-            printf("term_id=%d video_id=%d; pos=%d; "
-                    "ts_min=%d; ts_max=%d; byte_pos=%d; count=%d;\n",
-                    term.term_id, term.video_id, term.pos,
-                    term.ts_min, term.ts_max, term.byte_pos, term.count);
-        } while (next_term(&term));
+        if (readln(buf, MAX_QUERY_LEN) < 0) break;
+        SearchResult *results = search(buf);
+        arrfree(results);
     }
     printf("\n");
     return 0;
